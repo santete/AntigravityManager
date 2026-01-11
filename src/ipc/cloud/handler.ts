@@ -6,7 +6,7 @@ import { logger } from '../../utils/logger';
 
 import { shell } from 'electron';
 import fs from 'fs';
-import { closeAntigravity, startAntigravity } from '../../ipc/process/handler';
+import { closeAntigravity, startAntigravity, _waitForProcessExit } from '../../ipc/process/handler';
 import { updateTrayMenu } from '../../ipc/tray/handler';
 import { getAntigravityDbPaths } from '../../utils/paths';
 
@@ -189,7 +189,12 @@ export async function switchCloudAccount(accountId: string): Promise<void> {
     }
 
     // 2. Stop Antigravity Process
-    await closeAntigravity(); // This waits for it to close
+    await closeAntigravity();
+    try {
+      await _waitForProcessExit(10000); // Wait up to 10s for it to truly vanish
+    } catch (e) {
+      logger.warn('Process did not exit cleanly within timeout, but proceeding...', e);
+    }
 
     // 3. Backup Database (New Logic)
     const dbPaths = getAntigravityDbPaths();
@@ -214,7 +219,7 @@ export async function switchCloudAccount(accountId: string): Promise<void> {
 
     // 3. Inject Token
     // injectedCloudToken uses direct DB/FS access which is sync better-sqlite3.
-    CloudAccountRepo.injectCloudToken(account.token);
+    CloudAccountRepo.injectCloudToken(account);
 
     // 4. Update usage and active status
     CloudAccountRepo.updateLastUsed(account.id);

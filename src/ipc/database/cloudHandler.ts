@@ -291,7 +291,7 @@ export class CloudAccountRepo {
     }
   }
 
-  static injectCloudToken(token: CloudAccount['token']): void {
+  static injectCloudToken(account: CloudAccount): void {
     const dbPaths = getAntigravityDbPaths();
     let dbPath: string | null = null;
 
@@ -325,9 +325,9 @@ export class CloudAccountRepo {
 
       // 3. Create New Field 6
       const newField = ProtobufUtils.createOAuthTokenInfo(
-        token.access_token,
-        token.refresh_token,
-        token.expiry_timestamp,
+        account.token.access_token,
+        account.token.refresh_token,
+        account.token.expiry_timestamp,
       );
 
       // 4. Concatenate
@@ -344,13 +344,33 @@ export class CloudAccountRepo {
         'jetskiStateSync.agentManagerInitState',
       );
 
-      // 7. Inject Onboarding Flag (Missing in initial port)
+      // 7. Inject Onboarding Flag
       db.prepare('INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)').run(
         'antigravityOnboarding',
         'true',
       );
 
-      logger.info(`Successfully injected cloud token into Antigravity database at ${dbPath}.`);
+      // 8. Update Auth Status (Fix for switching issue)
+      // This ensures the UI reflects the user we just switched to
+      const authStatus = {
+        name: account.name || account.email,
+        email: account.email,
+        apiKey: account.token.access_token, // Critical for session recognition
+        // userStatusProtoBinaryBase64: ... // We cannot generate this easily, hoping IDE fetches it
+      };
+
+      db.prepare('INSERT OR REPLACE INTO ItemTable (key, value) VALUES (?, ?)').run(
+        'antigravityAuthStatus',
+        JSON.stringify(authStatus),
+      );
+
+      // 9. Remove google.antigravity to prevent conflicts
+      // This key often holds old state that might override our injected state
+      db.prepare('DELETE FROM ItemTable WHERE key = ?').run('google.antigravity');
+
+      logger.info(
+        `Successfully injected cloud token and identity for ${account.email} into Antigravity database at ${dbPath}.`,
+      );
     } finally {
       db.close();
     }

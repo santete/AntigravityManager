@@ -108,33 +108,67 @@ export async function closeAntigravity(): Promise<void> {
     // Helper to list processes
     const getProcesses = (): { pid: number; name: string; cmd: string }[] => {
       try {
-        let cmd = '';
+        let output = '';
         if (platform === 'win32') {
-          // Use wmic to get process info
-          cmd = 'wmic process get ProcessId,Name,CommandLine /FORMAT:CSV';
+          const psCommand = (cmdlet: string) =>
+            `powershell -NoProfile -Command "${cmdlet} Win32_Process -Filter \\"Name like 'Antigravity%'\\" | Select-Object ProcessId, Name, CommandLine | ConvertTo-Csv -NoTypeInformation"`;
+
+          try {
+            output = execSync(psCommand('Get-CimInstance'), {
+              encoding: 'utf-8',
+              maxBuffer: 1024 * 1024 * 10,
+              stdio: ['pipe', 'pipe', 'ignore'],
+            });
+          } catch (e) {
+            // CIM failed (likely older OS), try WMI
+            try {
+              output = execSync(psCommand('Get-WmiObject'), {
+                encoding: 'utf-8',
+                maxBuffer: 1024 * 1024 * 10,
+              });
+            } catch (innerE) {
+              // Both failed, throw original or log? Throwing lets the outer catch handle it (returning empty list)
+              throw e;
+            }
+          }
         } else {
           // Unix/Linux/macOS
-          cmd = 'ps -A -o pid,comm,args';
+          output = execSync('ps -A -o pid,comm,args', {
+            encoding: 'utf-8',
+            maxBuffer: 1024 * 1024 * 10,
+          });
         }
 
-        const output = execSync(cmd, { encoding: 'utf-8' });
-        const lines = output.split('\n');
-        const processList = [];
+        const processList: { pid: number; name: string; cmd: string }[] = [];
 
-        for (const line of lines) {
-          const parts = line.trim().split(/\s+/);
-          if (parts.length < 2) continue;
-
-          if (platform === 'win32') {
-            // CSV format parsing would be better, but simple check for now
-            if (line.includes('Antigravity')) {
-              // Extract PID (usually last or second to last in CSV)
-              const match = line.match(/(\d+)(?:\s*$)/);
-              if (match) {
-                processList.push({ pid: parseInt(match[1]), name: 'Antigravity', cmd: line });
-              }
+        if (platform === 'win32') {
+          // Parse CSV Output
+          const lines = output.trim().split(/\r?\n/);
+          // First line is headers "ProcessId","Name","CommandLine"
+          // We start from index 1
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            if (!line) {
+              continue;
             }
-          } else {
+
+            // Regex to match CSV fields: "val1","val2","val3"
+            const match = line.match(/^"(\d+)","(.*?)","(.*?)"$/);
+
+            if (match) {
+              const pid = parseInt(match[1]);
+              const name = match[2];
+              const cmdLine = match[3];
+
+              processList.push({ pid, name, cmd: cmdLine || name });
+            }
+          }
+        } else {
+          const lines = output.split('\n');
+          for (const line of lines) {
+            const parts = line.trim().split(/\s+/);
+            if (parts.length < 2) continue;
+
             const pid = parseInt(parts[0]);
             if (isNaN(pid)) continue;
             const rest = parts.slice(1).join(' ');
