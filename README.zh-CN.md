@@ -174,7 +174,6 @@
   <img src="docs/assets/screenshot-setting.png" alt="设置界面" width="48%" />
 </p>
 
-
 ---
 
 ## 🚀 快速开始
@@ -183,11 +182,11 @@
 
 从 [Releases](https://github.com/Draculabo/AntigravityManager/releases) 页面下载适合你平台的最新版本。
 
-| 平台 | 下载链接 |
-|------|----------|
+| 平台    | 下载链接                                                                       |
+| ------- | ------------------------------------------------------------------------------ |
 | Windows | [.exe 安装包](https://github.com/Draculabo/AntigravityManager/releases/latest) |
-| macOS | [.dmg 安装包](https://github.com/Draculabo/AntigravityManager/releases/latest) |
-| Linux | [.deb / .rpm](https://github.com/Draculabo/AntigravityManager/releases/latest) |
+| macOS   | [.dmg 安装包](https://github.com/Draculabo/AntigravityManager/releases/latest) |
+| Linux   | [.deb / .rpm](https://github.com/Draculabo/AntigravityManager/releases/latest) |
 
 ### 从源码构建
 
@@ -217,14 +216,14 @@ npm run make
 
 ## 🛠️ 技术栈
 
-| 类别 | 技术 |
-|------|------|
-| **核心** | [Electron](https://www.electronjs.org/)、[React](https://react.dev/)、[TypeScript](https://www.typescriptlang.org/) |
-| **构建工具** | [Vite](https://vitejs.dev/) |
-| **样式** | [TailwindCSS](https://tailwindcss.com/)、[Shadcn UI](https://ui.shadcn.com/) |
-| **状态管理** | [TanStack Query](https://tanstack.com/query/latest)、[TanStack Router](https://tanstack.com/router/latest) |
-| **数据库** | [Better-SQLite3](https://github.com/WiseLibs/better-sqlite3) |
-| **测试** | [Vitest](https://vitest.dev/)、[Playwright](https://playwright.dev/) |
+| 类别         | 技术                                                                                                                |
+| ------------ | ------------------------------------------------------------------------------------------------------------------- |
+| **核心**     | [Electron](https://www.electronjs.org/)、[React](https://react.dev/)、[TypeScript](https://www.typescriptlang.org/) |
+| **构建工具** | [Vite](https://vitejs.dev/)                                                                                         |
+| **样式**     | [TailwindCSS](https://tailwindcss.com/)、[Shadcn UI](https://ui.shadcn.com/)                                        |
+| **状态管理** | [TanStack Query](https://tanstack.com/query/latest)、[TanStack Router](https://tanstack.com/router/latest)          |
+| **数据库**   | [Better-SQLite3](https://github.com/WiseLibs/better-sqlite3)                                                        |
+| **测试**     | [Vitest](https://vitest.dev/)、[Playwright](https://playwright.dev/)                                                |
 
 ---
 
@@ -232,16 +231,16 @@ npm run make
 
 ### 可用脚本
 
-| 命令 | 描述 |
-|------|------|
-| `npm start` | 启动开发模式 |
-| `npm run lint` | 运行 ESLint 检查 |
+| 命令                   | 描述                     |
+| ---------------------- | ------------------------ |
+| `npm start`            | 启动开发模式             |
+| `npm run lint`         | 运行 ESLint 检查         |
 | `npm run format:write` | 使用 Prettier 格式化代码 |
-| `npm run test:unit` | 运行单元测试 |
-| `npm run test:e2e` | 运行 E2E 测试 |
-| `npm run test:all` | 运行所有测试 |
-| `npm run type-check` | TypeScript 类型检查 |
-| `npm run make` | 构建生产包 |
+| `npm run test:unit`    | 运行单元测试             |
+| `npm run test:e2e`     | 运行 E2E 测试            |
+| `npm run test:all`     | 运行所有测试             |
+| `npm run type-check`   | TypeScript 类型检查      |
+| `npm run make`         | 构建生产包               |
 
 ### 项目结构
 
@@ -265,6 +264,7 @@ AntigravityManager/
 <summary><b>Q: 程序无法启动怎么办？</b></summary>
 
 请检查：
+
 1. 确保已安装所有依赖：`npm install`
 2. 检查 Node.js 版本是否 >= 18
 3. 尝试删除 `node_modules` 后重新安装

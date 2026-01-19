@@ -52,20 +52,21 @@ npm start
 
 ### Available Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm start` | Start the app in development mode |
-| `npm run lint` | Run ESLint to check for code issues |
-| `npm run format:write` | Format code with Prettier |
-| `npm run test:unit` | Run unit tests with Vitest |
-| `npm run test:e2e` | Run E2E tests with Playwright |
-| `npm run test:all` | Run all tests |
-| `npm run type-check` | Run TypeScript type checking |
-| `npm run make` | Build production packages |
+| Command                | Description                         |
+| ---------------------- | ----------------------------------- |
+| `npm start`            | Start the app in development mode   |
+| `npm run lint`         | Run ESLint to check for code issues |
+| `npm run format:write` | Format code with Prettier           |
+| `npm run test:unit`    | Run unit tests with Vitest          |
+| `npm run test:e2e`     | Run E2E tests with Playwright       |
+| `npm run test:all`     | Run all tests                       |
+| `npm run type-check`   | Run TypeScript type checking        |
+| `npm run make`         | Build production packages           |
 
 ## ✏️ Making Changes
 
 1. **Create a new branch** from `main`:
+
    ```bash
    git checkout -b feature/your-feature-name
    # or
@@ -73,6 +74,7 @@ npm start
    ```
 
 2. **Make your changes** and commit them:
+
    ```bash
    git add .
    git commit -m "feat: add amazing new feature"
@@ -97,6 +99,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/). Each com
 ```
 
 **Types:**
+
 - `feat`: A new feature
 - `fix`: A bug fix
 - `docs`: Documentation only changes
@@ -107,6 +110,7 @@ We follow [Conventional Commits](https://www.conventionalcommits.org/). Each com
 - `chore`: Changes to build process or auxiliary tools
 
 **Examples:**
+
 ```
 feat(auth): add Google OAuth support
 fix(quota): resolve quota refresh timeout issue

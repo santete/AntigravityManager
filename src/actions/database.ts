@@ -1,5 +1,5 @@
-import { ipc } from "@/ipc/manager";
-import { AccountBackupData, Account } from "@/types/account";
+import { ipc } from '@/ipc/manager';
+import { AccountBackupData, Account } from '@/types/account';
 
 export function backupAccount(account: Account) {
   return ipc.client.database.backupAccount(account);

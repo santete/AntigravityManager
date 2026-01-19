@@ -1,12 +1,7 @@
-import { z } from "zod";
-import { os } from "@orpc/server";
-import {
-  listAccountsData,
-  addAccountSnapshot,
-  switchAccount,
-  deleteAccount,
-} from "./handler";
-import { AccountSchema } from "../../types/account";
+import { z } from 'zod';
+import { os } from '@orpc/server';
+import { listAccountsData, addAccountSnapshot, switchAccount, deleteAccount } from './handler';
+import { AccountSchema } from '../../types/account';
 
 export const accountRouter = os.router({
   listAccounts: os.output(z.array(AccountSchema)).handler(async () => {

@@ -1,4 +1,4 @@
-import { ipc } from "@/ipc/manager";
+import { ipc } from '@/ipc/manager';
 
 export function listAccounts() {
   return ipc.client.account.listAccounts();

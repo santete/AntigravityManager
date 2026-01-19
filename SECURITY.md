@@ -26,10 +26,10 @@ Master keys are stored in the OS native credential manager via `keytar`, never i
 
 ## 📋 Supported Versions
 
-| Version | Supported          |
-| ------- | ------------------ |
-| Latest  | :white_check_mark: |
-| < Latest | :x:               |
+| Version  | Supported          |
+| -------- | ------------------ |
+| Latest   | :white_check_mark: |
+| < Latest | :x:                |
 
 We only provide security updates for the latest version. Please ensure you're running the most recent release.
 

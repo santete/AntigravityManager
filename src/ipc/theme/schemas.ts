@@ -1,3 +1,3 @@
-import { z } from "zod";
+import { z } from 'zod';
 
-export const setThemeModeInputSchema = z.enum(["light", "dark", "system"]);
+export const setThemeModeInputSchema = z.enum(['light', 'dark', 'system']);

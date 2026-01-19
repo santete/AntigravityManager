@@ -1,5 +1,5 @@
-import { MainLayout } from "@/layouts/MainLayout";
-import { createRootRoute } from "@tanstack/react-router";
+import { MainLayout } from '@/layouts/MainLayout';
+import { createRootRoute } from '@tanstack/react-router';
 /* import { TanStackRouterDevtools } from '@tanstack/react-router-devtools' */
 
 /*

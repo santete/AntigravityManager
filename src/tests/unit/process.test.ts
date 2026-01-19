@@ -1,29 +1,27 @@
-import { describe, it, expect, vi } from "vitest";
-import {
-  isProcessRunning,
-  closeAntigravity,
-  startAntigravity,
-} from "../../ipc/process/handler";
-import { exec } from "child_process";
+import { describe, it, expect, vi } from 'vitest';
+import { isProcessRunning, closeAntigravity, startAntigravity } from '../../ipc/process/handler';
+import { exec } from 'child_process';
 
-vi.mock("child_process", () => {
+vi.mock('child_process', () => {
   return {
     exec: vi.fn(),
+    default: { exec: vi.fn() },
   };
 });
 
 // Mock promisify to return a function that returns a promise
-vi.mock("util", () => ({
+vi.mock('util', () => ({
   promisify: (fn: unknown) => fn,
+  default: { promisify: (fn: unknown) => fn },
 }));
 
-describe("Process Handler", () => {
-  it("should check if process is running", async () => {
+describe('Process Handler', () => {
+  it('should check if process is running', async () => {
     // Mock exec to return stdout
     const execMock = exec as unknown as ReturnType<typeof vi.fn>;
     execMock.mockImplementation((cmd, cb) => {
-      if (cb) cb(null, { stdout: "12345" }, { stderr: "" });
-      return { stdout: "12345" };
+      if (cb) cb(null, { stdout: '12345' }, { stderr: '' });
+      return { stdout: '12345' };
     });
 
     // Wait, promisify wraps exec.
@@ -49,7 +47,7 @@ describe("Process Handler", () => {
   // Skip complex mocking tests for now as they are fragile without proper setup.
   // I'll write a basic test structure.
 
-  it("should be defined", () => {
+  it('should be defined', () => {
     expect(isProcessRunning).toBeDefined();
     expect(closeAntigravity).toBeDefined();
     expect(startAntigravity).toBeDefined();
