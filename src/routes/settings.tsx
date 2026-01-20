@@ -17,9 +17,10 @@ import { getAppVersion, getPlatform } from '@/actions/app';
 import { useTranslation } from 'react-i18next';
 import { setAppLanguage } from '@/actions/language';
 import { useAppConfig } from '@/hooks/useAppConfig';
-import { Loader2 } from 'lucide-react';
+import { Loader2, FolderOpen } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { ProxyConfig } from '@/types/config';
+import { openLogDirectory } from '@/actions/system';
 
 function SettingsPage() {
   const { theme, setTheme } = useTheme();
@@ -193,6 +194,15 @@ function SettingsPage() {
 
                 <div className="text-muted-foreground">{t('settings.license')}</div>
                 <div className="font-medium">CC BY-NC-SA 4.0</div>
+
+                <div className="text-muted-foreground">{t('action.openLogs')}</div>
+                <button
+                  onClick={() => openLogDirectory()}
+                  className="flex items-center gap-2 font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                  <FolderOpen className="h-4 w-4" />
+                  <span>{t('settings.openLogDir', 'Open')}</span>
+                </button>
               </div>
             </CardContent>
           </Card>

@@ -1,6 +1,8 @@
 import { os } from '@orpc/server';
 import { z } from 'zod';
 import { networkInterfaces } from 'os';
+import { shell } from 'electron';
+import { getAgentDir } from '../../utils/paths';
 
 // Schema for IP info
 const IpInfoSchema = z.object({
@@ -60,5 +62,11 @@ export const systemHandler = os.router({
     });
 
     return results;
+  }),
+
+  // Open log directory in file explorer
+  openLogDirectory: os.output(z.void()).handler(async () => {
+    const logDir = getAgentDir();
+    await shell.openPath(logDir);
   }),
 });

@@ -30,6 +30,7 @@ i18n
             deleteBackup: 'Delete Backup',
             backupCurrent: 'Backup Current',
             retry: 'Retry',
+            openLogs: 'Open Log Directory',
           },
           error: {
             generic: 'An unexpected error occurred.',
@@ -77,6 +78,7 @@ i18n
             version: 'Version',
             platform: 'Platform',
             license: 'License',
+            openLogDir: 'Open',
             account: {
               title: 'Account Settings',
               description: 'Configure automatic account refresh and sync.',
@@ -304,6 +306,7 @@ i18n
             deleteBackup: '删除备份',
             backupCurrent: '备份当前账号',
             retry: '重试',
+            openLogs: '打开日志目录',
           },
           error: {
             generic: '发生未知错误。',
@@ -351,6 +354,7 @@ i18n
             version: '版本',
             platform: '平台',
             license: '许可证',
+            openLogDir: '打开',
             account: {
               title: '账号设置',
               description: '配置自动刷新和同步账号。',
