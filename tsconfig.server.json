@@ -1,0 +1,48 @@
+{
+    "compilerOptions": {
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "module": "commonjs",
+        "target": "ES2020",
+        "lib": [
+            "ES2020"
+        ],
+        "moduleResolution": "node",
+        "skipLibCheck": true,
+        "esModuleInterop": true,
+        "allowSyntheticDefaultImports": true,
+        "resolveJsonModule": true,
+        "declaration": true,
+        "declarationMap": false,
+        "sourceMap": false,
+        "removeComments": true,
+        "emitDecoratorMetadata": true,
+        "experimentalDecorators": true,
+        "strictPropertyInitialization": false,
+        "strict": true,
+        "forceConsistentCasingInFileNames": true,
+        "noFallthroughCasesInSwitch": true
+    },
+    "include": [
+        "src/server/**/*",
+        "src/services/**/*",
+        "src/types/**/*",
+        "src/lib/antigravity/**/*"
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "src/main.ts",
+        "src/preload.ts",
+        "src/renderer.ts",
+        "src/routes/**/*",
+        "src/components/**/*",
+        "src/layouts/**/*",
+        "src/hooks/**/*",
+        "src/actions/**/*",
+        "src/ipc/**/*",
+        "src/tests/**/*",
+        "**/*.test.ts",
+        "**/*.spec.ts"
+    ]
+}
