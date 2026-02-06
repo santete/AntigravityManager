@@ -24,6 +24,10 @@ export const app = {
                 return os.homedir();
         }
     },
+    getAppPath: () => {
+        const path = require('path');
+        return path.join(__dirname, '..', '..');
+    },
     getName: () => 'Antigravity Manager',
     getVersion: () => '0.6.0',
 };

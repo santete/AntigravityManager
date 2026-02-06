@@ -1,0 +1,13 @@
+# Render.com Build Configuration
+# https://render.com/docs/configure-environment
+
+# Build command (in Render dashboard)
+# npm install
+
+# Start command (in Render dashboard)  
+# node render-server-simple.js
+
+# Environment Variables (in Render dashboard)
+# API_KEY=sk-237f70229d394f69af234a7609703c64
+# PORT=10000
+# NODE_ENV=production
