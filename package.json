@@ -20,7 +20,8 @@
     "test:all": "vitest run && playwright test",
     "type-check": "tsc --noEmit",
     "build:server": "tsc -p tsconfig.server.json",
-    "render": "node render-server.js"
+    "render:build": "npm run package",
+    "render": "node render-server-simple.js"
   },
   "author": "Draculabo",
   "license": "CC-BY-NC-SA-4.0",

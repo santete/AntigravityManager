@@ -63,24 +63,59 @@ app.listen(PORT, '0.0.0.0', () => {
     bootstrapNestServer();
 });
 
-// Bootstrap NestJS
+// Bootstrap NestJS from Vite build
 async function bootstrapNestServer() {
     try {
-        console.log('🔄 Loading NestJS server...');
+        console.log('🔄 Loading NestJS server from Vite build...');
 
-        // Dynamically import server (sau khi build)
-        const serverPath = path.join(__dirname, 'dist', 'server', 'main.js');
-
-        if (!fs.existsSync(serverPath)) {
-            console.error('❌ Server build not found at:', serverPath);
-            console.error('💡 Run: npm run build:server');
-            process.exit(1);
+        //Strategy 1: Try Vite built output (.vite/build)
+        let bootstrapFn;
+        try {
+            const viteServerPath = path.join(__dirname, '.vite', 'build', 'server', 'main.js');
+            if (fs.existsSync(viteServerPath)) {
+                console.log('📦 Using Vite build:', viteServerPath);
+                const serverModule = require(viteServerPath);
+                bootstrapFn = serverModule.bootstrapNestServer;
+            }
+        } catch (e) {
+            console.log('⚠️  Vite build not found, trying direct TS...');
         }
 
-        const { bootstrapNestServer } = require(serverPath);
+        // Strategy 2: Run TypeScript directly with ts-node
+        if (!bootstrapFn) {
+            console.log('📦 Using ts-node to run TypeScript source...');
 
-        // Start NestJS on same port
-        await bootstrapNestServer(config);
+            // Register ts-node
+            require('ts-node').register({
+                transpileOnly: true,
+                compilerOptions: {
+                    module: 'commonjs',
+                    target: 'es2020',
+                    esModuleInterop: true,
+                    skipLibCheck: true,
+                },
+            });
+
+            // Mock electron before importing
+            require.cache['electron'] = {
+                exports: require('./src/mocks/electron.ts'),
+                id: 'electron',
+                filename: 'electron.js',
+                loaded: true,
+                children: [],
+                paths: [],
+            };
+
+            const serverModule = require('./src/server/main.ts');
+            bootstrapFn = serverModule.bootstrapNestServer;
+        }
+
+        if (!bootstrapFn) {
+            throw new Error('Could not load NestJS server module');
+        }
+
+        // Start NestJS
+        await bootstrapFn(config);
 
         console.log('✅ NestJS server started successfully');
         console.log(`📡 API endpoint: http://0.0.0.0:${PORT}/v1/chat/completions`);

@@ -21,13 +21,22 @@
         "strictPropertyInitialization": false,
         "strict": true,
         "forceConsistentCasingInFileNames": true,
-        "noFallthroughCasesInSwitch": true
+        "noFallthroughCasesInSwitch": true,
+        "baseUrl": ".",
+        "paths": {
+            "@/*": [
+                "./src/*"
+            ],
+            "electron": [
+                "./src/mocks/electron.ts"
+            ],
+            "better-sqlite3": [
+                "./node_modules/@types/better-sqlite3/index.d.ts"
+            ]
+        }
     },
     "include": [
-        "src/server/**/*",
-        "src/services/**/*",
-        "src/types/**/*",
-        "src/lib/antigravity/**/*"
+        "src/server/**/*"
     ],
     "exclude": [
         "node_modules",
