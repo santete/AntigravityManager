@@ -105,3 +105,11 @@ out/
 
 # Sentry Config File
 .env.sentry-build-plugin
+
+# Sensitive extraction scripts & DB backups
+cloud_accounts_backup.db
+cloud_accounts_copy.db
+extract-token.js
+extract-token.ps1
+quick-extract.js
+google_account_*.json

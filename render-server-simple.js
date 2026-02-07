@@ -1,22 +1,21 @@
 // Simple standalone server for Render.com
 // Minimal NestJS server without Electron dependencies
 
-const { NestFactory } = require('@nestjs/core');
-const { FastifyAdapter } = require('@nestjs/platform-fastify');
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
 
 const PORT = parseInt(process.env.PORT || '10000', 10);
 const API_KEY = process.env.API_KEY || 'sk-default-key';
 
-// Load Google accounts from environment variables
+// In-memory Google accounts storage (loaded from ENV + added via API)
 const googleAccounts = [];
 let accountIndex = 1;
 while (process.env[`GOOGLE_ACCOUNT_${accountIndex}`]) {
     try {
         const accountData = JSON.parse(process.env[`GOOGLE_ACCOUNT_${accountIndex}`]);
-        googleAccounts.push(accountData);
+        googleAccounts.push({
+            ...accountData,
+            addedAt: new Date().toISOString(),
+        });
         console.log(`📧 Loaded account ${accountIndex}: ${accountData.email}`);
     } catch (e) {
         console.error(`❌ Failed to parse GOOGLE_ACCOUNT_${accountIndex}:`, e.message);
@@ -32,22 +31,107 @@ console.log(`👥 Google Accounts: ${googleAccounts.length}`);
 // Health check server
 const app = express();
 
+// CORS middleware — cho phép admin web gọi API
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    if (req.method === 'OPTIONS') {
+        return res.sendStatus(204);
+    }
+    next();
+});
+
+app.use(express.json());
+
+// Auth middleware
+function requireAuth(req, res, next) {
+    const authHeader = req.headers.authorization;
+    const providedKey = authHeader?.replace('Bearer ', '');
+    if (providedKey !== API_KEY) {
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
+    next();
+}
+
 app.get('/health', (req, res) => {
     res.json({
         status: 'ok',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
         memory: process.memoryUsage(),
+        accounts: googleAccounts.length,
     });
 });
 
 app.get('/', (req, res) => {
     res.json({
         name: 'Antigravity Proxy Server',
-        version: '0.6.0',
+        version: '0.7.0',
         status: 'running',
+        accounts: googleAccounts.length,
         docs: '/v1/chat/completions',
     });
+});
+
+// ==========================================
+// Account Management API
+// ==========================================
+
+// Lấy danh sách accounts (masked tokens)
+app.get('/auth/accounts', requireAuth, (req, res) => {
+    const maskedAccounts = googleAccounts.map(acc => ({
+        email: acc.email,
+        hasToken: !!acc.access_token,
+        addedAt: acc.addedAt || new Date().toISOString(),
+    }));
+    res.json({ accounts: maskedAccounts, total: maskedAccounts.length });
+});
+
+// Thêm account mới (từ Supabase OAuth token)
+app.post('/auth/accounts', requireAuth, (req, res) => {
+    const { email, access_token, refresh_token } = req.body;
+
+    if (!email || !access_token) {
+        return res.status(400).json({ error: 'email and access_token are required' });
+    }
+
+    // Kiểm tra trùng email → update token
+    const existingIndex = googleAccounts.findIndex(acc => acc.email === email);
+    if (existingIndex >= 0) {
+        googleAccounts[existingIndex] = {
+            ...googleAccounts[existingIndex],
+            access_token,
+            refresh_token: refresh_token || googleAccounts[existingIndex].refresh_token,
+            addedAt: new Date().toISOString(),
+        };
+        console.log(`🔄 Updated account: ${email}`);
+        return res.json({ message: 'Account updated', email });
+    }
+
+    // Thêm mới
+    googleAccounts.push({
+        email,
+        access_token,
+        refresh_token: refresh_token || '',
+        addedAt: new Date().toISOString(),
+    });
+    console.log(`✅ Added account: ${email} (total: ${googleAccounts.length})`);
+    res.json({ message: 'Account added', email, total: googleAccounts.length });
+});
+
+// Xóa account
+app.delete('/auth/accounts/:email', requireAuth, (req, res) => {
+    const email = decodeURIComponent(req.params.email);
+    const index = googleAccounts.findIndex(acc => acc.email === email);
+
+    if (index < 0) {
+        return res.status(404).json({ error: 'Account not found' });
+    }
+
+    googleAccounts.splice(index, 1);
+    console.log(`🗑️ Removed account: ${email} (remaining: ${googleAccounts.length})`);
+    res.json({ message: 'Account removed', email, remaining: googleAccounts.length });
 });
 
 // Google API client
@@ -92,13 +176,7 @@ async function callGoogleGemini(account, messages, model) {
 }
 
 // Proxy implementation with real Google API
-app.post('/v1/chat/completions', express.json(), async (req, res) => {
-    const authHeader = req.headers.authorization;
-    const providedKey = authHeader?.replace('Bearer ', '');
-
-    if (providedKey !== API_KEY) {
-        return res.status(401).json({ error: 'Unauthorized' });
-    }
+app.post('/v1/chat/completions', requireAuth, async (req, res) => {
 
     // Check if we have Google accounts
     if (googleAccounts.length === 0) {
