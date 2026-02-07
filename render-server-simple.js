@@ -8,6 +8,15 @@ const API_KEY = process.env.API_KEY || 'sk-default-key';
 
 // In-memory Google accounts storage (loaded from ENV + added via API)
 const googleAccounts = [];
+
+// Server configuration (in-memory, persists until restart)
+const serverConfig = {
+    autoSwitch: true,
+    proxyMode: 'public', // 'public' | 'internal'
+    roundRobin: true,
+};
+let roundRobinIndex = 0;
+
 let accountIndex = 1;
 while (process.env[`GOOGLE_ACCOUNT_${accountIndex}`]) {
     try {
@@ -61,6 +70,7 @@ app.get('/health', (req, res) => {
         uptime: process.uptime(),
         memory: process.memoryUsage(),
         accounts: googleAccounts.length,
+        config: serverConfig,
     });
 });
 
@@ -72,6 +82,33 @@ app.get('/', (req, res) => {
         accounts: googleAccounts.length,
         docs: '/v1/chat/completions',
     });
+});
+
+// ==========================================
+// Server Configuration API
+// ==========================================
+
+// Lấy config hiện tại
+app.get('/config', requireAuth, (req, res) => {
+    res.json(serverConfig);
+});
+
+// Cập nhật config
+app.patch('/config', requireAuth, (req, res) => {
+    const { autoSwitch, proxyMode, roundRobin } = req.body;
+
+    if (typeof autoSwitch === 'boolean') {
+        serverConfig.autoSwitch = autoSwitch;
+    }
+    if (proxyMode === 'public' || proxyMode === 'internal') {
+        serverConfig.proxyMode = proxyMode;
+    }
+    if (typeof roundRobin === 'boolean') {
+        serverConfig.roundRobin = roundRobin;
+    }
+
+    console.log('⚙️ Config updated:', JSON.stringify(serverConfig));
+    res.json(serverConfig);
 });
 
 // ==========================================
@@ -156,8 +193,12 @@ async function callGoogleGemini(account, messages, model) {
         parts: [{ text: msg.content }],
     }));
 
-    // Call Gemini API
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`;
+    // Chọn endpoint dựa vào proxy mode
+    const baseUrl = serverConfig.proxyMode === 'internal'
+        ? 'https://cloudcode-pa.googleapis.com/v1internal'
+        : 'https://generativelanguage.googleapis.com/v1beta';
+
+    const url = `${baseUrl}/models/${geminiModel}:generateContent`;
     const response = await axios.post(url, {
         contents,
         generationConfig: {
@@ -175,6 +216,19 @@ async function callGoogleGemini(account, messages, model) {
     return response.data;
 }
 
+// Chọn account theo chiến lược (round-robin hoặc first)
+function pickAccount() {
+    if (googleAccounts.length === 0) {
+        return null;
+    }
+    if (serverConfig.roundRobin) {
+        const account = googleAccounts[roundRobinIndex % googleAccounts.length];
+        roundRobinIndex++;
+        return account;
+    }
+    return googleAccounts[0];
+}
+
 // Proxy implementation with real Google API
 app.post('/v1/chat/completions', requireAuth, async (req, res) => {
 
@@ -182,7 +236,7 @@ app.post('/v1/chat/completions', requireAuth, async (req, res) => {
     if (googleAccounts.length === 0) {
         return res.status(503).json({
             error: {
-                message: 'No Google accounts configured. Add GOOGLE_ACCOUNT_1 environment variable.',
+                message: 'No Google accounts configured. Add accounts via admin panel.',
                 type: 'configuration_error',
             },
         });
@@ -196,48 +250,65 @@ app.post('/v1/chat/completions', requireAuth, async (req, res) => {
         });
     }
 
-    try {
-        // Use first account (round-robin can be added later)
-        const account = googleAccounts[0];
-        const geminiResponse = await callGoogleGemini(account, messages, model);
+    // Auto-switch: thử nhiều accounts nếu bật
+    const maxRetries = serverConfig.autoSwitch ? googleAccounts.length : 1;
+    let lastError = null;
 
-        // Extract response
-        const candidate = geminiResponse.candidates?.[0];
-        const content = candidate?.content?.parts?.[0]?.text || 'No response';
+    for (let i = 0; i < maxRetries; i++) {
+        const account = pickAccount();
+        if (!account) {
+            break;
+        }
 
-        // Convert to OpenAI format
-        const response = {
-            id: `chatcmpl-${Date.now()}`,
-            object: 'chat.completion',
-            created: Math.floor(Date.now() / 1000),
-            model: model || 'gemini-2.5-flash',
-            choices: [{
-                index: 0,
-                message: {
-                    role: 'assistant',
-                    content: content,
+        try {
+            const geminiResponse = await callGoogleGemini(account, messages, model);
+
+            // Extract response
+            const candidate = geminiResponse.candidates?.[0];
+            const content = candidate?.content?.parts?.[0]?.text || 'No response';
+
+            // Convert to OpenAI format
+            const response = {
+                id: `chatcmpl-${Date.now()}`,
+                object: 'chat.completion',
+                created: Math.floor(Date.now() / 1000),
+                model: model || 'gemini-2.5-flash',
+                choices: [{
+                    index: 0,
+                    message: {
+                        role: 'assistant',
+                        content: content,
+                    },
+                    finish_reason: candidate?.finishReason?.toLowerCase() || 'stop',
+                }],
+                usage: {
+                    prompt_tokens: geminiResponse.usageMetadata?.promptTokenCount || 0,
+                    completion_tokens: geminiResponse.usageMetadata?.candidatesTokenCount || 0,
+                    total_tokens: geminiResponse.usageMetadata?.totalTokenCount || 0,
                 },
-                finish_reason: candidate?.finishReason?.toLowerCase() || 'stop',
-            }],
-            usage: {
-                prompt_tokens: geminiResponse.usageMetadata?.promptTokenCount || 0,
-                completion_tokens: geminiResponse.usageMetadata?.candidatesTokenCount || 0,
-                total_tokens: geminiResponse.usageMetadata?.totalTokenCount || 0,
-            },
-        };
+            };
 
-        res.json(response);
+            return res.json(response);
 
-    } catch (error) {
-        console.error('❌ Google API Error:', error.response?.data || error.message);
+        } catch (error) {
+            lastError = error;
+            console.error(`❌ Account ${account.email} failed:`, error.response?.data?.error?.message || error.message);
 
-        res.status(error.response?.status || 500).json({
-            error: {
-                message: error.response?.data?.error?.message || error.message,
-                type: 'api_error',
-            },
-        });
+            // Nếu auto-switch bật và có account khác, thử tiếp
+            if (serverConfig.autoSwitch && i < maxRetries - 1) {
+                console.log(`🔄 Auto-switching to next account (attempt ${i + 2}/${maxRetries})...`);
+                continue;
+            }
+        }
     }
+
+    // Tất cả accounts đều fail
+    res.status(lastError?.response?.status || 500).json({
+        error: {
+            message: lastError?.response?.data?.error?.message || lastError?.message || 'All accounts failed',
+            type: 'api_error',
+        },
+    });
 });
 
 app.listen(PORT, '0.0.0.0', () => {

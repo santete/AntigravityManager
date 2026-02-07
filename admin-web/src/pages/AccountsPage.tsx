@@ -145,8 +145,8 @@ export function AccountsPage({ apiKey, user, onBack, onLogout }: AccountsPagePro
                             Dashboard
                         </Button>
                         <div>
-                            <h1 className="text-2xl font-bold">Google Accounts</h1>
-                            <p className="text-sm text-muted-foreground">Quản lý tài khoản Google cho proxy</p>
+                            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Google Accounts</h1>
+                            <p className="text-sm text-gray-500 dark:text-gray-400">Quản lý tài khoản Google cho proxy</p>
                         </div>
                     </div>
                 </div>

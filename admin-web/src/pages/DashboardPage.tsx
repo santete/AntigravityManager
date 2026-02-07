@@ -1,8 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Activity, Database, LogOut, RefreshCw, Users } from 'lucide-react'
+import { Activity, Database, LogOut, RefreshCw, Users, Settings, ToggleLeft, ToggleRight, Shuffle } from 'lucide-react'
 import axios from 'axios'
+import { API_BASE_URL } from '@/lib/supabase'
+
+interface ServerConfig {
+  autoSwitch: boolean
+  proxyMode: 'public' | 'internal'
+  roundRobin: boolean
+}
 
 interface DashboardPageProps {
   apiKey: string
@@ -14,11 +21,38 @@ export function DashboardPage({ apiKey, onLogout, onNavigateToAccounts }: Dashbo
   const { data: healthData, isLoading, refetch } = useQuery({
     queryKey: ['health'],
     queryFn: async () => {
-      const response = await axios.get('https://api.projectnow.app/health')
+      const response = await axios.get(`${API_BASE_URL}/health`)
       return response.data
     },
-    refetchInterval: 30000, // Refresh every 30s
+    refetchInterval: 30000,
   })
+
+  // Server config state
+  const { data: serverConfig, refetch: refetchConfig } = useQuery<ServerConfig>({
+    queryKey: ['server-config'],
+    queryFn: async () => {
+      try {
+        const response = await axios.get(`${API_BASE_URL}/config`, {
+          headers: { Authorization: `Bearer ${apiKey}` },
+        })
+        return response.data
+      } catch {
+        return { autoSwitch: true, proxyMode: 'public', roundRobin: true }
+      }
+    },
+  })
+
+  const updateConfig = async (key: string, value: boolean | string) => {
+    try {
+      await axios.patch(`${API_BASE_URL}/config`, { [key]: value }, {
+        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      })
+      refetchConfig()
+      refetch()
+    } catch (err) {
+      console.error('Config update failed:', err)
+    }
+  }
 
   const formatUptime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600)
@@ -37,8 +71,8 @@ export function DashboardPage({ apiKey, onLogout, onNavigateToAccounts }: Dashbo
       <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div>
-            <h1 className="text-2xl font-bold">Antigravity Admin</h1>
-            <p className="text-sm text-muted-foreground">Proxy Management Dashboard</p>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Antigravity Admin</h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Proxy Management Dashboard</p>
           </div>
           <div className="flex items-center gap-4">
             <Button variant="outline" size="sm" onClick={onNavigateToAccounts}>
@@ -49,7 +83,7 @@ export function DashboardPage({ apiKey, onLogout, onNavigateToAccounts }: Dashbo
               <RefreshCw className="w-4 h-4 mr-2" />
               Refresh
             </Button>
-            <Button variant="ghost" size="sm" onClick={onLogout}>
+            <Button variant="outline" size="sm" onClick={onLogout}>
               <LogOut className="w-4 h-4 mr-2" />
               Logout
             </Button>
@@ -114,6 +148,101 @@ export function DashboardPage({ apiKey, onLogout, onNavigateToAccounts }: Dashbo
             </CardContent>
           </Card>
         </div>
+
+        {/* Server Configuration */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Settings className="w-5 h-5" />
+              Server Configuration
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Auto Switch */}
+              <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <Shuffle className="w-4 h-4 text-muted-foreground" />
+                    <span className="font-medium">Auto Switch Account</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Tự động chuyển sang account khác khi gặp lỗi rate limit hoặc token hết hạn
+                  </p>
+                </div>
+                <button
+                  onClick={() => updateConfig('autoSwitch', !serverConfig?.autoSwitch)}
+                  className="flex-shrink-0 ml-4"
+                >
+                  {serverConfig?.autoSwitch ? (
+                    <ToggleRight className="w-10 h-10 text-green-500" />
+                  ) : (
+                    <ToggleLeft className="w-10 h-10 text-gray-400" />
+                  )}
+                </button>
+              </div>
+
+              {/* Round Robin */}
+              <div className="flex items-center justify-between p-4 border border-border rounded-lg">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <RefreshCw className="w-4 h-4 text-muted-foreground" />
+                    <span className="font-medium">Round Robin</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Phân phối request đều giữa các account (thay vì chỉ dùng account đầu tiên)
+                  </p>
+                </div>
+                <button
+                  onClick={() => updateConfig('roundRobin', !serverConfig?.roundRobin)}
+                  className="flex-shrink-0 ml-4"
+                >
+                  {serverConfig?.roundRobin ? (
+                    <ToggleRight className="w-10 h-10 text-green-500" />
+                  ) : (
+                    <ToggleLeft className="w-10 h-10 text-gray-400" />
+                  )}
+                </button>
+              </div>
+
+              {/* Proxy Mode */}
+              <div className="p-4 border border-border rounded-lg">
+                <div className="flex items-center gap-2 mb-3">
+                  <Activity className="w-4 h-4 text-muted-foreground" />
+                  <span className="font-medium">Proxy Mode</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Chọn endpoint Google Gemini API để proxy requests
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => updateConfig('proxyMode', 'public')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${serverConfig?.proxyMode === 'public'
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border hover:bg-accent'
+                      }`}
+                  >
+                    🌐 Public API
+                  </button>
+                  <button
+                    onClick={() => updateConfig('proxyMode', 'internal')}
+                    className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${serverConfig?.proxyMode === 'internal'
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background border-border hover:bg-accent'
+                      }`}
+                  >
+                    🔒 Internal (Cloud)
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {serverConfig?.proxyMode === 'internal'
+                    ? 'Sử dụng cloudcode-pa.googleapis.com (nội bộ Google, cần quyền đặc biệt)'
+                    : 'Sử dụng generativelanguage.googleapis.com (public, ổn định)'}
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* API Configuration */}
         <Card className="mb-8">
