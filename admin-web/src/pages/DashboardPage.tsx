@@ -223,8 +223,8 @@ export function DashboardPage({ apiKey, onLogout, onNavigateToAccounts, onNaviga
                   <button
                     onClick={() => updateConfig('proxyMode', 'public')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${serverConfig?.proxyMode === 'public'
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-background border-border hover:bg-accent'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background border-border hover:bg-accent'
                       }`}
                   >
                     🌐 Public API
@@ -232,8 +232,8 @@ export function DashboardPage({ apiKey, onLogout, onNavigateToAccounts, onNaviga
                   <button
                     onClick={() => updateConfig('proxyMode', 'internal')}
                     className={`px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${serverConfig?.proxyMode === 'internal'
-                        ? 'bg-primary text-primary-foreground border-primary'
-                        : 'bg-background border-border hover:bg-accent'
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background border-border hover:bg-accent'
                       }`}
                   >
                     🔒 Internal (Cloud)

@@ -8,9 +8,10 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 // Render backend API base URL
 export const API_BASE_URL = 'https://api.projectnow.app'
 
-// Scopes cần thiết để gọi Gemini API qua Google Cloud
+// Scopes cần thiết để gọi Gemini API (public endpoint)
+// cloud-platform là restricted scope, dùng generative-language thay thế
 export const GOOGLE_SCOPES = [
-    'https://www.googleapis.com/auth/cloud-platform',
+    'https://www.googleapis.com/auth/generative-language',
     'https://www.googleapis.com/auth/userinfo.email',
     'https://www.googleapis.com/auth/userinfo.profile',
 ].join(' ')

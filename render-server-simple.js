@@ -6,8 +6,90 @@ const express = require('express');
 const PORT = parseInt(process.env.PORT || '10000', 10);
 const API_KEY = process.env.API_KEY || 'sk-default-key';
 
-// In-memory Google accounts storage (loaded from ENV + added via API)
+// Supabase config (dùng REST API để persistent storage)
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://mygkmiofmbhnxzrvrqml.supabase.co';
+const SUPABASE_KEY = process.env.SUPABASE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im15Z2ttaW9mbWJobnh6cnZycW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjgzMDI2MTgsImV4cCI6MjA4Mzg3ODYxOH0.agnb8OBTwlI3iOgWdkDRnsKg-WHD1C58ys_8nK4zsxo';
+
+// In-memory Google accounts storage (synced with Supabase DB)
 const googleAccounts = [];
+
+// ==========================================
+// Supabase Persistence Layer
+// ==========================================
+
+async function supabaseRequest(method, path, body = null) {
+    const url = `${SUPABASE_URL}/rest/v1/${path}`;
+    const headers = {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        'Prefer': method === 'POST' ? 'return=representation' : '',
+    };
+    const options = { method, headers };
+    if (body) {
+        options.body = JSON.stringify(body);
+    }
+    const response = await fetch(url, options);
+    if (!response.ok) {
+        const text = await response.text();
+        throw new Error(`Supabase ${method} ${path} failed: ${response.status} ${text}`);
+    }
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
+}
+
+// Load accounts từ Supabase DB khi startup
+async function loadAccountsFromDB() {
+    try {
+        const rows = await supabaseRequest('GET', 'proxy_accounts?select=*');
+        if (rows && rows.length > 0) {
+            googleAccounts.length = 0;
+            for (const row of rows) {
+                googleAccounts.push({
+                    email: row.email,
+                    access_token: row.access_token,
+                    refresh_token: row.refresh_token || '',
+                    addedAt: row.added_at || new Date().toISOString(),
+                });
+            }
+            console.log(`📦 Loaded ${googleAccounts.length} accounts from Supabase DB`);
+        } else {
+            console.log('📦 No accounts in Supabase DB');
+        }
+    } catch (err) {
+        console.error('⚠️ Failed to load from Supabase DB:', err.message);
+        console.log('   (Bảng proxy_accounts chưa tồn tại? Chạy SQL trong Supabase Dashboard)');
+    }
+}
+
+// Lưu account vào DB
+async function saveAccountToDB(account) {
+    try {
+        // Upsert: nếu email đã tồn tại thì update
+        await supabaseRequest('POST',
+            'proxy_accounts?on_conflict=email',
+            {
+                email: account.email,
+                access_token: account.access_token,
+                refresh_token: account.refresh_token || '',
+                added_at: account.addedAt || new Date().toISOString(),
+            }
+        );
+        console.log(`💾 Saved account to DB: ${account.email}`);
+    } catch (err) {
+        console.error(`⚠️ Failed to save to DB: ${err.message}`);
+    }
+}
+
+// Xóa account khỏi DB
+async function deleteAccountFromDB(email) {
+    try {
+        await supabaseRequest('DELETE', `proxy_accounts?email=eq.${encodeURIComponent(email)}`);
+        console.log(`🗑️ Deleted from DB: ${email}`);
+    } catch (err) {
+        console.error(`⚠️ Failed to delete from DB: ${err.message}`);
+    }
+}
 
 // Server configuration (in-memory, persists until restart)
 const serverConfig = {
@@ -333,7 +415,7 @@ app.get('/auth/accounts', requireAuth, (req, res) => {
 });
 
 // Thêm account mới (từ Supabase OAuth token)
-app.post('/auth/accounts', requireAuth, (req, res) => {
+app.post('/auth/accounts', requireAuth, async (req, res) => {
     const { email, access_token, refresh_token } = req.body;
 
     if (!email || !access_token) {
@@ -349,23 +431,28 @@ app.post('/auth/accounts', requireAuth, (req, res) => {
             refresh_token: refresh_token || googleAccounts[existingIndex].refresh_token,
             addedAt: new Date().toISOString(),
         };
+        // Persist to DB
+        await saveAccountToDB(googleAccounts[existingIndex]);
         console.log(`🔄 Updated account: ${email}`);
         return res.json({ message: 'Account updated', email });
     }
 
     // Thêm mới
-    googleAccounts.push({
+    const newAccount = {
         email,
         access_token,
         refresh_token: refresh_token || '',
         addedAt: new Date().toISOString(),
-    });
+    };
+    googleAccounts.push(newAccount);
+    // Persist to DB
+    await saveAccountToDB(newAccount);
     console.log(`✅ Added account: ${email} (total: ${googleAccounts.length})`);
     res.json({ message: 'Account added', email, total: googleAccounts.length });
 });
 
 // Xóa account
-app.delete('/auth/accounts/:email', requireAuth, (req, res) => {
+app.delete('/auth/accounts/:email', requireAuth, async (req, res) => {
     const email = decodeURIComponent(req.params.email);
     const index = googleAccounts.findIndex(acc => acc.email === email);
 
@@ -374,6 +461,8 @@ app.delete('/auth/accounts/:email', requireAuth, (req, res) => {
     }
 
     googleAccounts.splice(index, 1);
+    // Remove from DB
+    await deleteAccountFromDB(email);
     console.log(`🗑️ Removed account: ${email} (remaining: ${googleAccounts.length})`);
     res.json({ message: 'Account removed', email, remaining: googleAccounts.length });
 });
@@ -529,10 +618,14 @@ app.post('/v1/chat/completions', requireAuth, async (req, res) => {
     });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '0.0.0.0', async () => {
     console.log(`✅ Server running on http://0.0.0.0:${PORT}`);
     console.log(`📡 Health: http://0.0.0.0:${PORT}/health`);
     console.log(`🎯 API: http://0.0.0.0:${PORT}/v1/chat/completions`);
+
+    // Load accounts từ Supabase DB
+    await loadAccountsFromDB();
+    console.log(`👥 Total accounts available: ${googleAccounts.length}`);
 });
 
 // Self-ping for Render free tier
