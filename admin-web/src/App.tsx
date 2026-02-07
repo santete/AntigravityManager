@@ -3,13 +3,14 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { AccountsPage } from './pages/AccountsPage'
+import { ModelMonitorPage } from './pages/ModelMonitorPage'
 import { supabase } from './lib/supabase'
 import type { User } from '@supabase/supabase-js'
 import './index.css'
 
 const queryClient = new QueryClient()
 
-type Page = 'dashboard' | 'accounts'
+type Page = 'dashboard' | 'accounts' | 'models'
 
 function App() {
   const [apiKey, setApiKey] = useState<string | null>(null)
@@ -69,18 +70,26 @@ function App() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {currentPage === 'dashboard' ? (
+      {currentPage === 'dashboard' && (
         <DashboardPage
           apiKey={apiKey}
           onLogout={handleLogout}
           onNavigateToAccounts={() => setCurrentPage('accounts')}
+          onNavigateToModels={() => setCurrentPage('models')}
         />
-      ) : (
+      )}
+      {currentPage === 'accounts' && (
         <AccountsPage
           apiKey={apiKey}
           user={supabaseUser}
           onBack={() => setCurrentPage('dashboard')}
           onLogout={handleSupabaseLogout}
+        />
+      )}
+      {currentPage === 'models' && (
+        <ModelMonitorPage
+          apiKey={apiKey}
+          onBack={() => setCurrentPage('dashboard')}
         />
       )}
     </QueryClientProvider>

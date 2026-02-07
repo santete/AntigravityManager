@@ -17,6 +17,61 @@ const serverConfig = {
 };
 let roundRobinIndex = 0;
 
+// ==========================================
+// Model Usage Tracker (in-memory)
+// ==========================================
+
+// Gemini free tier limits (public API)
+const MODEL_LIMITS = {
+    'gemini-2.5-pro': { rpm: 5, rpd: 25, tpm: 250000 },
+    'gemini-2.5-flash': { rpm: 10, rpd: 500, tpm: 250000 },
+    'gemini-2.0-flash': { rpm: 15, rpd: 1500, tpm: 1000000 },
+    'gemini-2.0-flash-lite': { rpm: 30, rpd: 1500, tpm: 1000000 },
+    'gemini-1.5-pro': { rpm: 2, rpd: 50, tpm: 32000 },
+    'gemini-1.5-flash': { rpm: 15, rpd: 1500, tpm: 1000000 },
+};
+
+// Usage tracker: { "email::model": { requests: [{timestamp}], errors: [{timestamp, code, message}] } }
+const usageTracker = {};
+
+function getUsageKey(email, model) {
+    return `${email}::${model}`;
+}
+
+function recordUsage(email, model, isError = false, errorInfo = null) {
+    const key = getUsageKey(email, model);
+    if (!usageTracker[key]) {
+        usageTracker[key] = { requests: [], errors: [] };
+    }
+    const now = Date.now();
+    usageTracker[key].requests.push({ timestamp: now });
+    if (isError && errorInfo) {
+        usageTracker[key].errors.push({ timestamp: now, ...errorInfo });
+    }
+    // Giữ lại data trong 24h
+    const dayAgo = now - 24 * 60 * 60 * 1000;
+    usageTracker[key].requests = usageTracker[key].requests.filter(r => r.timestamp > dayAgo);
+    usageTracker[key].errors = usageTracker[key].errors.filter(r => r.timestamp > dayAgo);
+}
+
+function getUsageStats(email, model) {
+    const key = getUsageKey(email, model);
+    const data = usageTracker[key];
+    if (!data) {
+        return { rpm: 0, rpd: 0, errors24h: 0, lastError: null };
+    }
+    const now = Date.now();
+    const oneMinAgo = now - 60 * 1000;
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+
+    const rpm = data.requests.filter(r => r.timestamp > oneMinAgo).length;
+    const rpd = data.requests.filter(r => r.timestamp > oneDayAgo).length;
+    const errors24h = data.errors.filter(r => r.timestamp > oneDayAgo).length;
+    const lastError = data.errors.length > 0 ? data.errors[data.errors.length - 1] : null;
+
+    return { rpm, rpd, errors24h, lastError };
+}
+
 let accountIndex = 1;
 while (process.env[`GOOGLE_ACCOUNT_${accountIndex}`]) {
     try {
@@ -43,7 +98,7 @@ const app = express();
 // CORS middleware — cho phép admin web gọi API
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
     res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     if (req.method === 'OPTIONS') {
         return res.sendStatus(204);
@@ -109,6 +164,158 @@ app.patch('/config', requireAuth, (req, res) => {
 
     console.log('⚙️ Config updated:', JSON.stringify(serverConfig));
     res.json(serverConfig);
+});
+
+// ==========================================
+// Model Status API
+// ==========================================
+
+// Kiểm tra danh sách models khả dụng cho 1 account
+async function listModelsForAccount(account) {
+    const axios = require('axios');
+    const baseUrl = serverConfig.proxyMode === 'internal'
+        ? 'https://cloudcode-pa.googleapis.com/v1internal'
+        : 'https://generativelanguage.googleapis.com/v1beta';
+
+    try {
+        const response = await axios.get(`${baseUrl}/models`, {
+            headers: { 'Authorization': `Bearer ${account.access_token}` },
+            timeout: 15000,
+        });
+        // Lọc chỉ lấy Gemini generation models
+        const models = (response.data.models || [])
+            .filter(m => m.name && m.supportedGenerationMethods?.includes('generateContent'))
+            .map(m => ({
+                id: m.name.replace('models/', ''),
+                displayName: m.displayName || m.name,
+                inputTokenLimit: m.inputTokenLimit,
+                outputTokenLimit: m.outputTokenLimit,
+            }));
+        return { success: true, models };
+    } catch (err) {
+        return {
+            success: false,
+            models: [],
+            error: err.response?.data?.error?.message || err.message,
+        };
+    }
+}
+
+// Kiểm tra nhanh 1 model có hoạt động không (gửi request nhẹ)
+async function probeModel(account, modelId) {
+    const axios = require('axios');
+    const baseUrl = serverConfig.proxyMode === 'internal'
+        ? 'https://cloudcode-pa.googleapis.com/v1internal'
+        : 'https://generativelanguage.googleapis.com/v1beta';
+
+    try {
+        const response = await axios.post(
+            `${baseUrl}/models/${modelId}:generateContent`,
+            {
+                contents: [{ role: 'user', parts: [{ text: 'hi' }] }],
+                generationConfig: { maxOutputTokens: 1 },
+            },
+            {
+                headers: {
+                    'Authorization': `Bearer ${account.access_token}`,
+                    'Content-Type': 'application/json',
+                },
+                timeout: 15000,
+            }
+        );
+        return { status: 'ok', latencyMs: 0 };
+    } catch (err) {
+        const status = err.response?.status;
+        const message = err.response?.data?.error?.message || err.message;
+        if (status === 429) {
+            return { status: 'rate_limited', error: message };
+        }
+        if (status === 401 || status === 403) {
+            return { status: 'auth_error', error: message };
+        }
+        return { status: 'error', error: message };
+    }
+}
+
+// GET /models/status — trạng thái tất cả models × accounts
+app.get('/models/status', requireAuth, async (req, res) => {
+    if (googleAccounts.length === 0) {
+        return res.json({ accounts: [], message: 'No accounts configured' });
+    }
+
+    const targetModels = Object.keys(MODEL_LIMITS);
+    const results = [];
+
+    // Xử lý song song cho từng account
+    const accountPromises = googleAccounts.map(async (account) => {
+        // Lấy list models từ Google
+        const listResult = await listModelsForAccount(account);
+        const availableModelIds = listResult.models.map(m => m.id);
+
+        // Kiểm tra từng model trong free tier list
+        const modelStatuses = targetModels.map(modelId => {
+            const limits = MODEL_LIMITS[modelId];
+            const usage = getUsageStats(account.email, modelId);
+            const isAvailable = availableModelIds.some(id => id.startsWith(modelId));
+
+            // Tính % sử dụng
+            const rpmPercent = limits.rpm > 0 ? Math.round((usage.rpm / limits.rpm) * 100) : 0;
+            const rpdPercent = limits.rpd > 0 ? Math.round((usage.rpd / limits.rpd) * 100) : 0;
+
+            // Xác định trạng thái
+            let status = 'unknown';
+            if (!listResult.success) {
+                status = 'auth_error';
+            } else if (!isAvailable) {
+                status = 'unavailable';
+            } else if (rpmPercent >= 100 || rpdPercent >= 100) {
+                status = 'exhausted';
+            } else if (rpmPercent >= 80 || rpdPercent >= 80) {
+                status = 'warning';
+            } else {
+                status = 'ok';
+            }
+
+            return {
+                model: modelId,
+                available: isAvailable,
+                status,
+                limits,
+                usage: {
+                    rpm: usage.rpm,
+                    rpd: usage.rpd,
+                    rpmPercent,
+                    rpdPercent,
+                    errors24h: usage.errors24h,
+                    lastError: usage.lastError,
+                },
+            };
+        });
+
+        return {
+            email: account.email,
+            tokenValid: listResult.success,
+            tokenError: listResult.error || null,
+            models: modelStatuses,
+        };
+    });
+
+    const accountResults = await Promise.all(accountPromises);
+    res.json({ accounts: accountResults, checkedAt: new Date().toISOString() });
+});
+
+// POST /models/probe — probe 1 model cụ thể cho 1 account
+app.post('/models/probe', requireAuth, async (req, res) => {
+    const { email, model } = req.body;
+    if (!email || !model) {
+        return res.status(400).json({ error: 'email and model are required' });
+    }
+    const account = googleAccounts.find(a => a.email === email);
+    if (!account) {
+        return res.status(404).json({ error: 'Account not found' });
+    }
+    const result = await probeModel(account, model);
+    res.json({ email, model, ...result });
 });
 
 // ==========================================
@@ -263,6 +470,10 @@ app.post('/v1/chat/completions', requireAuth, async (req, res) => {
         try {
             const geminiResponse = await callGoogleGemini(account, messages, model);
 
+            // Track usage thành công
+            const resolvedModel = model || 'gemini-2.0-flash';
+            recordUsage(account.email, resolvedModel, false);
+
             // Extract response
             const candidate = geminiResponse.candidates?.[0];
             const content = candidate?.content?.parts?.[0]?.text || 'No response';
@@ -291,6 +502,13 @@ app.post('/v1/chat/completions', requireAuth, async (req, res) => {
             return res.json(response);
 
         } catch (error) {
+            // Track usage lỗi
+            const resolvedModel = model || 'gemini-2.0-flash';
+            recordUsage(account.email, resolvedModel, true, {
+                code: error.response?.status || 0,
+                message: error.response?.data?.error?.message || error.message,
+            });
+
             lastError = error;
             console.error(`❌ Account ${account.email} failed:`, error.response?.data?.error?.message || error.message);
 

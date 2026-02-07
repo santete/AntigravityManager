@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Activity, Database, LogOut, RefreshCw, Users, Settings, ToggleLeft, ToggleRight, Shuffle } from 'lucide-react'
+import { Activity, Database, LogOut, RefreshCw, Users, Settings, ToggleLeft, ToggleRight, Shuffle, Zap } from 'lucide-react'
 import axios from 'axios'
 import { API_BASE_URL } from '@/lib/supabase'
 
@@ -15,9 +15,10 @@ interface DashboardPageProps {
   apiKey: string
   onLogout: () => void
   onNavigateToAccounts: () => void
+  onNavigateToModels: () => void
 }
 
-export function DashboardPage({ apiKey, onLogout, onNavigateToAccounts }: DashboardPageProps) {
+export function DashboardPage({ apiKey, onLogout, onNavigateToAccounts, onNavigateToModels }: DashboardPageProps) {
   const { data: healthData, isLoading, refetch } = useQuery({
     queryKey: ['health'],
     queryFn: async () => {
@@ -78,6 +79,10 @@ export function DashboardPage({ apiKey, onLogout, onNavigateToAccounts }: Dashbo
             <Button variant="outline" size="sm" onClick={onNavigateToAccounts}>
               <Users className="w-4 h-4 mr-2" />
               Accounts
+            </Button>
+            <Button variant="outline" size="sm" onClick={onNavigateToModels}>
+              <Zap className="w-4 h-4 mr-2" />
+              Models
             </Button>
             <Button variant="outline" size="sm" onClick={() => refetch()}>
               <RefreshCw className="w-4 h-4 mr-2" />
